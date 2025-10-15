@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Accueil</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+  <img src="assets/logo.svg" alt="Pulse logo" class="logo" />
+  <h1 style="display:flex;align-items:center;gap:8px;">
+    Pulse <span style="color:#FF007F;">❤</span>
+  </h1>
+</div>
+
+    <nav class="nav">
+      <button class="nav-btn" data-target="connexion.html">Connexion</button>
+      <button class="nav-btn" data-target="inscription.html">Inscription</button>
+      <button class="nav-btn" data-target="match.html">Match</button>
+      <button class="nav-btn" data-target="enneagramme.html">Ennéagramme</button>
+      <button class="nav-btn" data-target="intimite.html">39 Questions</button>
+      <button class="nav-btn" data-target="tarifs.html">Tarifs</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h2>Rencontrez des personnes en profondeur</h2>
+      <p>Pulse vous propose un test d'intimité, un ennéagramme et un match hebdomadaire.</p>
+      <div class="hero-actions">
+        <button class="primary" data-target="inscription.html">Créer un compte</button>
+        <button class="secondary" data-target="connexion.html">Se connecter</button>
+      </div>
+    </section>
+
+    <section class="features">
+      <article class="card">
+        <h3>Ennéagramme</h3>
+        <p>Testez votre profil en 9 types.</p>
+        <button class="btn-link" data-target="enneagramme.html">Passer le test</button>
+      </article>
+
+      <article class="card">
+        <h3>39 Questions</h3>
+        <p>Répondez aux 39 questions d'intimité.</p>
+        <button class="btn-link" data-target="intimite.html">Commencer</button>
+      </article>
+
+      <article class="card">
+        <h3>Match hebdomadaire</h3>
+        <p>Recevez un profil par semaine.</p>
+        <button class="btn-link" data-target="match.html">Voir mes matchs</button>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <small>© Pulse — Prototype MVP</small>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
