@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — 39 Questions</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="site-header small">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Pulse logo" class="logo" />
+      <h1>Pulse</h1>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn" data-target="index.html">Accueil</button>
+      <button class="nav-btn" data-target="match.html">Match</button>
+    </nav>
+  </header>
+
+  <main class="container narrow">
+    <section class="card">
+      <h2>39 Questions d'intimité</h2>
+      <p class="muted">Répondez en toute sincérité. Les réponses sont stockées en local (prototype).</p>
+
+      <div id="questionCard" class="card" style="padding:16px;">
+        <div id="qNumber" style="font-weight:600">Question 1 / 39</div>
+        <h3 id="qText" style="margin:8px 0">...</h3>
+
+        <textarea id="qAnswer" rows="4" placeholder="Votre réponse..." style="width:100%;border-radius:8px;padding:10px"></textarea>
+
+        <div class="form-actions" style="margin-top:12px;">
+          <button id="prevBtn" class="secondary" type="button">Précédent</button>
+          <button id="nextBtn" class="primary" type="button">Suivant</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <small id="progress" class="muted">Progression: 0 / 39</small>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button id="finishBtn" class="primary" type="button">Terminer et voir mon match</button>
+        <button class="secondary" data-target="index.html" type="button">Annuler</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <small>© Pulse — Prototype</small>
+  </footer>
+
+  <script>
+    // 39 questions (français). Tu peux modifier les textes si tu as ta liste.
+    const QUESTIONS = [
+      "1. Si vous pouviez inviter n'importe qui au monde à dîner, qui inviteriez-vous ?",
+      "2. Aimeriez-vous être célèbre ? De quelle façon ?",
+      "3. Avant d'appeler quelqu'un, répétez-vous ce que vous allez dire ? Pourquoi ?",
+      "4. Pour vous, quelle serait une journée parfaite ?",
+      "5. Quand avez-vous chanté pour la dernière fois ? Pour quelqu'un d'autre ?",
+      "6. Si vous pouviez vivre jusqu'à 90 ans et conserver soit l'esprit soit le corps d'une personne de 30 ans pendant les 60 dernières années de votre vie, que choisiriez-vous ?",
+      "7. Avez-vous un secret déjà gardé pour un ami ? Racontez.",
+      "8. Qu'est-ce qui constitue l'amitié pour vous ?",
+      "9. Quel rôle l'amour joue-t-il dans votre vie ?",
+      "10. Partagez quelque chose que vous considérez comme une véritable réussite dans votre vie.",
+      "11. Quel souvenir d'enfance vous hante le plus ?",
+      "12. Quel est votre plus grand regret (si vous en avez) ?",
+      "13. Quelle est la chose la plus embarrassante que vous ayez faite ?",
+      "14. Quand avez-vous pleuré pour la dernière fois devant quelqu'un ? Et seul ?",
+      "15. Quel est votre souvenir préféré lié à une relation amicale ?",
+      "16. Quel est votre plus grand rêve à long terme ?",
+      "17. Quelle est la qualité que vous appréciez le plus chez un partenaire ?",
+      "18. En quoi êtes-vous le plus différent(e) de ce que vos parents auraient souhaité pour vous ?",
+      "19. Quelle habitude aimeriez-vous changer ?",
+      "20. Quelle est la chose la plus gentille qu'on ait faite pour vous ?",
+      "21. Quelle est la chose la plus méchante qu'on ait faite pour vous ?",
+      "22. Avez-vous peur de quelque chose qui semble irrationnel ?",
+      "23. Quelle compétence aimeriez-vous maîtriser en 6 mois ?",
+      "24. Racontez votre pire rendez-vous.",
+      "25. Décrivez un moment où vous avez pris une décision courageuse.",
+      "26. Quelle est la valeur la plus importante que vous voulez transmettre (à vos enfants, amis) ?",
+      "27. Quelle est la chose que vous cachez le plus souvent aux autres ?",
+      "28. Si vous aviez un jour parfait, où iriez-vous ?",
+      "29. Quelle est votre définition du bonheur ?",
+      "30. Rappelez un moment où vous avez été profondément embarrassé.",
+      "31. Quels sont vos trois plus grandes forces ?",
+      "32. Quels sont vos trois plus grandes faiblesses ?",
+      "33. Avez-vous déjà sacrifié quelque chose d'important pour quelqu'un ? Racontez.",
+      "34. Quelle est votre relation avec le pardon ?",
+      "35. Que voudriez-vous changer dans votre enfance si c'était possible ?",
+      "36. Avez-vous une croyance spirituelle ou philosophique importante ?",
+      "37. Quelle est la chose la plus risquée que vous ayez faite ?",
+      "38. Qu'est-ce que l'intimité signifie pour vous ?",
+      "39. Que voudriez-vous que l'on se rappelle de vous ?"
+    ];
+
+    let idx = 0;
+    const answersKey = 'pulse_intimite_answers';
+
+    function loadState() {
+      const raw = localStorage.getItem(answersKey);
+      if (raw) {
+        try { return JSON.parse(raw); } catch(e){ return Array(39).fill(''); }
+      }
+      return Array(39).fill('');
+    }
+
+    let answers = loadState();
+
+    function showQuestion(i){
+      const qText = document.getElementById('qText');
+      const qNumber = document.getElementById('qNumber');
+      const qAnswer = document.getElementById('qAnswer');
+      const progress = document.getElementById('progress');
+
+      qNumber.textContent = `Question ${i+1} / ${QUESTIONS.length}`;
+      qText.textContent = QUESTIONS[i];
+      qAnswer.value = answers[i] || '';
+      progress.textContent = `Progression: ${answers.filter(a=>a && a.trim().length>0).length} / ${QUESTIONS.length}`;
+
+      // Prev/Next button disable
+      document.getElementById('prevBtn').disabled = (i===0);
+      document.getElementById('nextBtn').textContent = (i===QUESTIONS.length-1) ? 'Dernière →' : 'Suivant';
+    }
+
+    function saveCurrent(){
+      const val = document.getElementById('qAnswer').value;
+      answers[idx] = val;
+      localStorage.setItem(answersKey, JSON.stringify(answers));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('prevBtn').addEventListener('click', () => {
+        saveCurrent();
+        if (idx>0) idx--;
+        showQuestion(idx);
+      });
+      document.getElementById('nextBtn').addEventListener('click', () => {
+        saveCurrent();
+        if (idx < QUESTIONS.length -1) idx++;
+        showQuestion(idx);
+      });
+      document.getElementById('qAnswer').addEventListener('input', () => {
+        // autosave lightly
+        saveCurrent();
+        document.getElementById('progress').textContent = `Progression: ${answers.filter(a=>a && a.trim().length>0).length} / ${QUESTIONS.length}`;
+      });
+      document.getElementById('finishBtn').addEventListener('click', () => {
+        saveCurrent();
+        alert('Réponses enregistrées localement. Vous pouvez maintenant consulter votre match (prototype).');
+        window.location.href = 'match.html';
+      });
+      showQuestion(idx);
+    });
+  </script>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

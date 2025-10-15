@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Profils factices & compatibilité</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #0f1720;
+      --muted: #9aa4b2;
+      --accent: #ff1177;
+      --accent-2: #6ad1ff;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#08101a 0%, #061019 100%);color:#e6eef6;font-family:Inter,system-ui,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:28px auto;padding:18px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:10px;align-items:center;margin:14px 0;flex-wrap:wrap}
+    input[type=number]{width:80px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button{padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}
+    .card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.02)}
+    .card .head{display:flex;gap:12px;align-items:center}
+    .thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.04)}
+    .name{font-size:16px;font-weight:700}
+    .city{color:var(--muted);font-size:13px}
+    .compat{margin-left:auto;text-align:right}
+    .bar{height:8px;border-radius:6px;background:var(--glass);overflow:hidden;margin-top:6px}
+    .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+    .actions{display:flex;gap:8px;margin-top:10px}
+    .actions button{padding:8px 10px;border-radius:8px;font-weight:600}
+    .muted { color: var(--muted); font-size:13px; }
+
+    /* Detail drawer */
+    .drawer{position:fixed;right:18px;top:18px;bottom:18px;width:420px;max-width:95%;background:linear-gradient(180deg,#071019, #0b1722);border-radius:12px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,0.7);transform:translateX(110%);transition:transform .28s cubic-bezier(.2,.9,.3,1);z-index:100}
+    .drawer.open{transform:translateX(0)}
+    .drawer .photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .drawer .photos img{width:120px;height:80px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.04)}
+    .drawer h3{margin:0}
+    .answers{margin-top:12px;max-height:240px;overflow:auto;padding-right:8px}
+    .answers div{margin-bottom:6px}
+    .chat-area{margin-top:12px;border-top:1px solid rgba(255,255,255,0.03);padding-top:10px}
+    .chat-messages{max-height:160px;overflow:auto;margin-bottom:8px}
+    .chat-input{display:flex;gap:8px}
+    .chat-input input{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    @media (max-width:600px){ .drawer{position:fixed;left:6px;right:6px;top:auto;bottom:6px;height:60vh} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">P</div>
+      <div>
+        <h1>Pulse — Profils factices & compatibilité</h1>
+        <div class="muted">Génère des profils pour tester la logique de matching.</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <label>Nombre :
+        <input id="count" type="number" min="1" max="50" value="8">
+      </label>
+
+      <button id="generate">Générer profils</button>
+      <button id="clear" class="ghost">Supprimer profils factices</button>
+      <button id="refresh" class="ghost">Rafraîchir affichage</button>
+
+      <div style="flex:1"></div>
+
+      <div class="muted">Profil comparé :</div>
+      <select id="useProfile">
+        <option value="local">Profil local (inscription_profile)</option>
+        <option value="sample">Exemple intégré</option>
+      </select>
+    </div>
+
+    <section>
+      <div id="summary" class="muted">Chargement...</div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <footer>⚙️ Les profils sont sauvegardés dans <code>localStorage</code> (clé <strong>pulse_public_profiles</strong>).</footer>
+  </div>
+
+  <!-- drawer -->
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+      <div>
+        <h3 id="d_name">Nom</h3>
+        <div class="muted" id="d_city">Ville</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="closeDrawer" class="ghost">Fermer</button>
+      </div>
+    </div>
+
+    <div id="d_bio" style="margin-top:10px" class="muted"></div>
+    <div class="photos" id="d_photos"></div>
+
+    <div class="answers">
+      <h4 style="margin:8px 0 6px 0">39 réponses</h4>
+      <div id="d_answers" class="muted"></div>
+    </div>
+
+    <div class="chat-area">
+      <h4 style="margin:8px 0 6px 0">Chat (local)</h4>
+      <div class="chat-messages" id="chat_msgs"></div>
+      <div class="chat-input">
+        <input id="chat_text" placeholder="Écrire un message..." />
+        <button id="chat_send">Envoyer</button>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+  /*******************************************************************
+   * fake_profiles_with_compat.html
+   * - génère des faux profils dans localStorage (pulse_public_profiles)
+   * - calcule une compatibilité heuristique par rapport à "profil local"
+   * - affiche la liste avec taux (%) et barre visuelle
+   * - panneau détail avec bio, photos, 39 réponses et chat local
+   *******************************************************************/
+
+  const PUBLIC_KEY = 'pulse_public_profiles';
+  const PROFILE_KEY = 'pulse_user_profile'; // page inscription_profile.html stocke ici
+  const FAKE_PREFIX = 'fake_';
+
+  // ================= helpers =================
+  function readJSON(k, fallback=null){ try{ const v=localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; } }
+  function writeJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+  // sample local profile if none exists
+  function sampleLocalProfile(){
+    return {
+      id: 'local_demo_1',
+      firstName: 'Kevin',
+      name: 'Kevin Ribeiro',
+      city: 'Toulouse',
+      bio: 'Prototype local — je recherche l’authenticité et la curiosité.',
+      photos: ['https://picsum.photos/seed/kev/400/300'],
+      enneagram: [2,3,4,1,5,3,4,2,1],
+      answers: Array.from({length:39}, (_,i)=>`Réponse exemple ${i+1}`)
+    };
+  }
+
+  // generate enneagram random (1..5)
+  function randomEnnea(){ return Array.from({length:9}, ()=> Math.floor(Math.random()*5)+1); }
+  // random answers short
+  function randomAnswers(){
+    const pool = ['Aimer','Voyager','Lire','Cuisine','Musique','Séries','Sport','Animaux','Nature','Sortir','Tranquille','Curieux','Social','Réfléchi'];
+    return Array.from({length:39}, (_,i)=> pool[Math.floor(Math.random()*pool.length)] + (Math.random()>0.7 ? ' ✨' : ''));
+  }
+
+  // make fake profile
+  function makeFake(i){
+    const prenoms = ['Léa','Tom','Sophie','Marc','Inès','Paul','Ana','Hugo','Clara','Lucas','Manon','Romain','Julie','Arthur','Emma','Noah','Camille','Maxime','Chloé','Maya'];
+    const villes = ['Paris','Toulouse','Lyon','Marseille','Bordeaux','Nantes','Lille','Nice','Strasbourg','Montpellier'];
+    const name = prenoms[Math.floor(Math.random()*prenoms.length)] + (Math.random()>0.5 ? ' ' + ['Dupont','Martin','Leclerc','Bernard'][Math.floor(Math.random()*4)] : '');
+    const city = villes[Math.floor(Math.random()*villes.length)];
+    const photos = [
+      `https://picsum.photos/seed/${encodeURIComponent(name+i+'a')}/400/300`,
+      `https://picsum.photos/seed/${encodeURIComponent(name+i+'b')}/400/300`
+    ];
+    return {
+      id: FAKE_PREFIX + (Date.now().toString(36).slice(-6)) + '_' + i,
+      name,
+      firstName: name.split(' ')[0],
+      city,
+      bio: `Bio test pour ${name}. C'est un profil généré pour tester l'interface.`,
+      photos,
+      enneagram: randomEnnea(),
+      answers: randomAnswers(),
+      publishedAt: new Date().toISOString()
+    };
+  }
+
+  // ================= compatibility functions =================
+  // enneagram similarity -> percent (0..100)
+  function enneagramSimilarity(a,b){
+    if(!Array.isArray(a) || !Array.isArray(b) || a.length!==9 || b.length!==9) return 50;
+    let sum=0;
+    for(let i=0;i<9;i++) sum += (4 - Math.abs(Number(a[i]) - Number(b[i]))); // 0..4 per item
+    const max = 9*4;
+    return Math.round((sum / max) * 100);
+  }
+
+  // quick answers similarity: fraction of identical tokens across answers
+  function answersSimilarity(a,b){
+    if(!Array.isArray(a) || !Array.isArray(b) || a.length!==39 || b.length!==39) return 40;
+    // compare normalized words frequency across all answers
+    const norm = arr => arr.map(s => String(s||'').toLowerCase().replace(/[^\w\s]/g,'').split(/\s+/).filter(Boolean));
+    const A = norm(a).flat();
+    const B = norm(b).flat();
+    const setA = new Set(A);
+    let common = 0;
+    for(const w of new Set(B)){ if(setA.has(w)) common++; }
+    const union = new Set([...A,...B]).size || 1;
+    return Math.round((common / union) * 100);
+  }
+
+  // final compatibility: weighted average (enn 70%, answers 30%)
+  function compatibilityPercent(profileA, profileB){
+    const e = enneagramSimilarity(profileA.enneagram || [], profileB.enneagram || []);
+    const q = answersSimilarity(profileA.answers || [], profileB.answers || []);
+    return Math.round(e*0.7 + q*0.3);
+  }
+
+  // ================= UI rendering =================
+  const grid = document.getElementById('grid');
+  const summary = document.getElementById('summary');
+  const drawer = document.getElementById('drawer');
+  const d_name = document.getElementById('d_name');
+  const d_city = document.getElementById('d_city');
+  const d_bio = document.getElementById('d_bio');
+  const d_photos = document.getElementById('d_photos');
+  const d_answers = document.getElementById('d_answers');
+  const chat_msgs = document.getElementById('chat_msgs');
+
+  function renderAll(){
+    const pool = readJSON(PUBLIC_KEY, []) || [];
+    const localOpt = document.getElementById('useProfile').value;
+    const local = (localOpt === 'local') ? (readJSON(PROFILE_KEY, null) || sampleLocalProfile()) : sampleLocalProfile();
+
+    summary.textContent = `Profils publics: ${pool.length} — Profil comparé : ${local.name || local.firstName} (${local.city||'—'})`;
+
+    grid.innerHTML = pool.map(p => {
+      const percent = compatibilityPercent(local, p);
+      return `
+      <div class="card" data-id="${p.id}">
+        <div class="head">
+          <img class="thumb" src="${p.photos?.[0]||'https://picsum.photos/seed/default/200/150'}" alt="">
+          <div>
+            <div class="name">${escapeHtml(p.name || p.firstName || 'Profil')}</div>
+            <div class="city">${escapeHtml(p.city||'')}</div>
+          </div>
+          <div class="compat">
+            <div style="font-size:14px;font-weight:700">${percent}%</div>
+            <div class="bar"><i style="width:${percent}%;"></i></div>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px">${escapeHtml(truncate(p.bio||'',100))}</div>
+        <div class="actions">
+          <button class="view" data-id="${p.id}">Voir</button>
+          <button class="force" data-id="${p.id}">Forcer match</button>
+        </div>
+      </div>
+      `;
+    }).join('');
+
+    // attach handlers
+    document.querySelectorAll('.view').forEach(b => b.onclick = e => openDetail(b.dataset.id));
+    document.querySelectorAll('.force').forEach(b => b.onclick = e => {
+      forceMatch(b.dataset.id);
+      alert('Match forcé (localStorage pulse_matches).');
+    });
+  }
+
+  function escapeHtml(s){ if(!s) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+  function truncate(s,n){ if(!s) return ''; return s.length>n ? s.slice(0,n-1)+'…' : s; }
+
+  // force match - create pulse_matches entry
+  function forceMatch(profileId){
+    const me = readJSON(PROFILE_KEY, null) || sampleLocalProfile();
+    const matches = readJSON('pulse_matches', []) || [];
+    const pair = [me.id, profileId].sort().join('::');
+    if(!matches.some(m=>m.pair===pair)){
+      matches.push({ pair, aId: me.id, bId: profileId, createdAt: new Date().toISOString() });
+      writeJSON('pulse_matches', matches);
+    }
+  }
+
+  // open detail drawer
+  function openDetail(id){
+    const pool = readJSON(PUBLIC_KEY, []) || [];
+    const p = pool.find(x=>x.id===id);
+    if(!p) { alert('Profil non trouvé'); return; }
+    d_name.textContent = p.name || p.firstName || 'Profil';
+    d_city.textContent = p.city || '';
+    d_bio.textContent = p.bio || '';
+    d_photos.innerHTML = (p.photos || []).map(u=>`<img src="${u}" alt="photo">`).join('');
+    d_answers.innerHTML = (p.answers || []).map((a,i)=>`<div><strong>Q${i+1}:</strong> ${escapeHtml(a||'—')}</div>`).join('');
+    loadChat(id);
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden','false');
+  }
+
+  function closeDetail(){
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+  }
+
+  // chat stored in localStorage per profile
+  function loadChat(profileId){
+    const chatAll = readJSON('pulse_chat_messages', {});
+    const msgs = chatAll[profileId] || [];
+    chat_msgs.innerHTML = msgs.map(m => `<div class="muted"><strong>${escapeHtml(m.sender)}:</strong> ${escapeHtml(m.text)}</div>`).join('');
+    chat_msgs.scrollTop = chat_msgs.scrollHeight;
+    // attach send handler
+    const send = document.getElementById('chat_send');
+    const input = document.getElementById('chat_text');
+    send.onclick = () => {
+      const t = input.value.trim(); if(!t) return;
+      const key = profileId;
+      const ca = readJSON('pulse_chat_messages', {});
+      if(!ca[key]) ca[key]=[];
+      ca[key].push({ sender: 'me', text: t, date: new Date().toISOString() });
+      // simulate reply sometimes
+      if(Math.random()>0.4) ca[key].push({ sender: 'them', text: 'Merci — réponse automatique de test 😊', date: new Date().toISOString() });
+      writeJSON('pulse_chat_messages', ca);
+      input.value='';
+      loadChat(profileId);
+    };
+  }
+
+  // ================= seed / clear =================
+  function seed(n){
+    const pool = readJSON(PUBLIC_KEY, []) || [];
+    for(let i=0;i<n;i++){
+      pool.push(makeFake(i + pool.length));
+    }
+    writeJSON(PUBLIC_KEY, pool);
+    renderAll();
+  }
+  function clearFakes(){
+    const pool = readJSON(PUBLIC_KEY, []) || [];
+    const filtered = pool.filter(p => !(p.id && String(p.id).startsWith(FAKE_PREFIX)));
+    writeJSON(PUBLIC_KEY, filtered);
+    renderAll();
+  }
+
+  // ================= init handlers =================
+  document.getElementById('generate').addEventListener('click', ()=>{
+    const n = Number(document.getElementById('count').value) || 8;
+    seed(n);
+    alert(`${n} profils générés`);
+  });
+  document.getElementById('clear').addEventListener('click', ()=>{
+    clearFakes();
+    alert('Profils factices supprimés');
+  });
+  document.getElementById('refresh').addEventListener('click', renderAll);
+  document.getElementById('closeDrawer').addEventListener('click', closeDetail);
+
+  // onclick outside drawer closes (small UX)
+  document.addEventListener('click', (e)=>{
+    if(!drawer.classList.contains('open')) return;
+    if(e.target.closest('.drawer')) return;
+    if(e.target.closest('.view')) return;
+    // click outside -> close
+    closeDetail();
+  });
+
+  // re-render when select profile option changes
+  document.getElementById('useProfile').addEventListener('change', renderAll);
+
+  // initial render
+  (function initDemo(){
+    // if no public profiles at all, create a couple
+    if(!(readJSON(PUBLIC_KEY,[]) || []).length) seed(6);
+    renderAll();
+  })();
+
+  </script>
+  
+</body>
+</html>

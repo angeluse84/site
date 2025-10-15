@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Profils publics</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    main.container { margin-top: 40px; }
+    .profile-grid { display:grid; grid-template-columns:320px 1fr; gap:16px; }
+    .avatar-big { width:140px;height:140px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,0.1) }
+    .thumb { width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,0.1) }
+    .photos-row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap }
+    .muted-small { color:var(--muted); font-size:13px }
+    .answers-block { max-height:56vh; overflow:auto; padding-right:6px }
+    .btn-small { padding:6px 8px; border-radius:8px; font-size:14px; }
+    .bio { white-space:pre-wrap; }
+    aside .card { margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Pulse logo" class="logo" />
+      <h1>Pulse</h1>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn" data-target="index.html">Accueil</button>
+      <button class="nav-btn active" data-target="profiles_public_view.html">Profils</button>
+      <button class="nav-btn" data-target="inscription_profile.html">Mon profil</button>
+      <button class="nav-btn" data-target="enneagramme.html">Ennéagramme</button>
+      <button class="nav-btn" data-target="intimite.html">39 Questions</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Profils publics</h2>
+      <p class="muted">Choisis un profil pour voir sa bio. Les <strong>39 réponses</strong> sont affichées seulement si un <strong>match</strong> existe entre vous deux.</p>
+
+      <div class="profile-grid" style="margin-top:16px">
+        <!-- Liste des profils à gauche -->
+        <aside>
+          <div class="card" style="padding:12px">
+            <h4>Profils publiés</h4>
+            <div id="publicList" style="margin-top:8px">Chargement…</div>
+            <div style="margin-top:8px">
+              <label for="threshold">Seuil match (%) :</label>
+              <input id="threshold" type="number" min="10" max="100" value="60" style="width:80px;margin-left:8px" />
+            </div>
+            <div style="margin-top:8px">
+              <button id="refreshBtn" class="btn-link btn-small">Rafraîchir</button>
+            </div>
+          </div>
+
+          <div class="card" style="padding:12px">
+            <h4>Mon profil local</h4>
+            <div id="myProfileSummary" class="muted-small" style="margin-top:8px">Chargement…</div>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="secondary btn-small" data-target="inscription_profile.html">Éditer mon profil</button>
+              <button class="btn-link btn-small" data-target="enneagramme.html">Mon Ennéagramme</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Détails du profil sélectionné -->
+        <div>
+          <div id="profileCard" class="card" style="padding:16px">
+            <h3 id="profileName">Sélectionne un profil</h3>
+            <div id="profileMeta" class="muted-small">Aucune sélection</div>
+            <div style="display:flex;gap:16px;margin-top:12px;align-items:flex-start">
+              <div style="width:160px;text-align:center">
+                <img id="profileAvatar" class="avatar-big" src="assets/logo.svg" alt="avatar" />
+                <div id="photosRow" class="photos-row" style="margin-top:10px"></div>
+              </div>
+
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div>
+                    <h3 id="profileFirstName" style="margin:0"></h3>
+                    <div id="profileCity" class="muted-small" style="margin-top:6px"></div>
+                  </div>
+                  <div>
+                    <div id="compatInfo" class="muted-small">Compatibilité : —</div>
+                    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                      <button id="requestMatchBtn" class="primary btn-small">Demander match</button>
+                      <button id="viewAnswersBtn" class="secondary btn-small">Voir 39 réponses</button>
+                      <button id="createProfileBtn" class="primary">Créer mon profil</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:12px">
+                  <h4>Bio</h4>
+                  <div id="profileBio" class="bio muted-small" style="margin-top:6px">—</div>
+                </div>
+
+                <div id="answersSection" style="margin-top:16px;display:none">
+                  <hr style="opacity:0.06" />
+                  <h4>39 réponses</h4>
+                  <div id="answersContainer" class="answers-block muted-small" style="margin-top:8px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="muted-small">Notes :</div>
+            <div id="noteArea" class="muted-small" style="margin-top:6px">
+              Utilise « Voir 39 réponses » — elles s’afficheront uniquement si un match existe ou si la compatibilité est suffisante.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><small>© Pulse — Prototype harmonisé</small></footer>
+
+  <script>
+    const PUBLIC_KEY = 'pulse_public_profiles';
+    const PROFILE_KEY = 'pulse_user_profile';
+    const ENNEA_KEY = 'pulse_enneagramme';
+    const INTIMITE_KEY = 'pulse_intimite_answers';
+    const MATCHES_KEY = 'pulse_matches';
+
+    function readJSON(key, fallback=null){
+      try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch(e){ return fallback; }
+    }
+    function writeJSON(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+    function escapeHtml(s){ if (!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+    function enneagramCompatibility(a,b){
+      if(!Array.isArray(a) || !Array.isArray(b) || a.length!==9 || b.length!==9) return null;
+      let diff=0; for(let i=0;i<9;i++) diff+=Math.abs(Number(a[i])-Number(b[i]));
+      const percent = Math.round((1 - diff/36)*100);
+      return { percent };
+    }
+
+    function getMatches(){ return readJSON(MATCHES_KEY, []); }
+    function addMatch(aId,bId){
+      const matches=getMatches(); const pair=[aId,bId].sort().join('::');
+      if(matches.some(m=>m.pair===pair)) return false;
+      matches.push({pair,aId,bId,createdAt:new Date().toISOString()});
+      writeJSON(MATCHES_KEY,matches); return true;
+    }
+    function isMatched(aId,bId){
+      const pair=[aId,bId].sort().join('::'); return getMatches().some(m=>m.pair===pair);
+    }
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      const publicList=document.getElementById('publicList');
+      const profileName=document.getElementById('profileName');
+      const profileAvatar=document.getElementById('profileAvatar');
+      const profileBio=document.getElementById('profileBio');
+      const profileCity=document.getElementById('profileCity');
+      const compatInfo=document.getElementById('compatInfo');
+      const answersContainer=document.getElementById('answersContainer');
+      const answersSection=document.getElementById('answersSection');
+      const noteArea=document.getElementById('noteArea');
+      const refresh=document.getElementById('refreshBtn');
+
+      let pool=readJSON(PUBLIC_KEY,[])||[];
+      let myProfile=readJSON(PROFILE_KEY,null)||{id:'anon',firstName:'Utilisateur',answers:[],enneagram:null};
+
+      function renderPublicList(){
+        if(!pool.length){ publicList.innerHTML='<div class="muted-small">Aucun profil public.</div>'; return; }
+        publicList.innerHTML=pool.map(p=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div style="display:flex;gap:10px;align-items:center">
+              <img src="${p.photos?.[0]||'assets/logo.svg'}" class="thumb" />
+              <div>
+                <strong>${escapeHtml(p.name||p.firstName||'')}</strong>
+                <div class="muted-small">${escapeHtml(p.city||'')}</div>
+              </div>
+            </div>
+            <button class="btn-link btn-small selectBtn" data-id="${p.id}">Voir</button>
+          </div>`).join('');
+
+        document.querySelectorAll('.selectBtn').forEach(btn=>{
+          btn.onclick=()=>{ const id=btn.dataset.id; const p=pool.find(x=>x.id===id); if(p) showProfile(p); };
+        });
+      }
+
+      function showProfile(p){
+        profileName.textContent=p.name||p.firstName||'Profil';
+        profileAvatar.src=p.photos?.[0]||'assets/logo.svg';
+        profileBio.textContent=p.bio||'—';
+        profileCity.textContent=p.city||'';
+        const myEnnea=myProfile.enneagram, theirEnnea=p.enneagram;
+        let compatText='Compatibilité : —';
+        if(myEnnea&&theirEnnea){ const c=enneagramCompatibility(myEnnea,theirEnnea); compatText=`Compatibilité Ennéa : ${c.percent}%`; }
+        compatInfo.textContent=compatText;
+
+        document.getElementById('requestMatchBtn').onclick=()=>tryMatch(p);
+        document.getElementById('viewAnswersBtn').onclick=()=>displayAnswersIfAllowed(p);
+      }
+
+      function tryMatch(p){
+        const myId=myProfile.id, theirId=p.id, compat=enneagramCompatibility(myProfile.enneagram,p.enneagram);
+        const threshold=Number(document.getElementById('threshold').value)||60;
+        if(compat && compat.percent>=threshold && myProfile.answers?.length===39 && p.answers?.length===39){
+          addMatch(myId,theirId);
+          alert('🤝 Match réussi ! Vous pouvez voir vos 39 réponses.');
+          showAnswers(p);
+        }else alert('Match impossible : compatibilité ou réponses insuffisantes.');
+      }
+
+      function displayAnswersIfAllowed(p){
+        const myId=myProfile.id, theirId=p.id;
+        if(isMatched(myId,theirId)){ showAnswers(p); alert('🎉 Vous êtes matchés ! Les 39 réponses de l’autre sont visibles.'); }
+        else alert('Aucun match existant — réponses cachées.');
+      }
+
+      function showAnswers(p){
+        answersSection.style.display='block';
+        const a=p.answers||[];
+        answersContainer.innerHTML=a.map((x,i)=>`<p><strong>Q${i+1} :</strong> ${escapeHtml(x||'—')}</p>`).join('');
+      }
+
+      refresh.onclick=()=>renderPublicList();
+      renderPublicList();
+      document.querySelectorAll('[data-target]').forEach(b=>b.onclick=()=>window.location.href=b.dataset.target);
+    });
+  </script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const btnCreate = document.getElementById('createProfileBtn'); // ton bouton d'inscription
+  if (btnCreate) {
+    btnCreate.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // ici, tu peux enregistrer les infos dans localStorage si besoin
+      // ...
+
+      // puis redirection vers la page des profils publics
+      window.location.href = "profiles_public_view.html";
+    });
+  }
+
+  // pour rendre les boutons du menu cliquables
+  document.querySelectorAll('[data-target]').forEach(b => {
+    b.addEventListener('click', () => {
+      window.location.href = b.dataset.target;
+    });
+  });
+});
+</script>
+</body>
+</html>

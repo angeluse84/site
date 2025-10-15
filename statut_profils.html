@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse — Statut des profils</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    main.container { margin-top: 40px; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .stat-card {
+      padding: 20px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .stat-card h3 {
+      margin-bottom: 10px;
+      color: #FF007F;
+    }
+    .stat-value {
+      font-size: 2.2em;
+      font-weight: bold;
+    }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Pulse logo" class="logo">
+      <h1>Pulse</h1>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn" data-target="index.html">Accueil</button>
+      <button class="nav-btn" data-target="inscription_profile.html">Profil</button>
+      <button class="nav-btn" data-target="profiles_public_view.html">Profils</button>
+      <button class="nav-btn" data-target="match.html">Match</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2>📊 Statut des profils</h2>
+    <p class="muted">Cette page affiche un résumé des profils enregistrés, publiés et matchés dans ton espace local Pulse.</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Profil local</h3>
+        <div class="stat-value" id="statLocal">0</div>
+        <p class="muted">Créé sur ton appareil</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>Profils publics</h3>
+        <div class="stat-value" id="statPublics">0</div>
+        <p class="muted">Disponibles pour les matchs</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>Profils de test</h3>
+        <div class="stat-value" id="statFakes">0</div>
+        <p class="muted">Générés pour simulation</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>Matchs existants</h3>
+        <div class="stat-value" id="statMatchs">0</div>
+        <p class="muted">Liens entre utilisateurs</p>
+      </div>
+    </div>
+
+    <div style="margin-top:30px;text-align:center;">
+      <button class="primary" id="refreshBtn">🔄 Actualiser</button>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <small>© Pulse — Statut des profils</small>
+  </footer>
+
+  <script>
+    const PROFILE_KEY = 'pulse_user_profile';
+    const PUBLIC_KEY = 'pulse_public_profiles';
+    const MATCH_KEY = 'pulse_matches';
+
+    function readJSON(key, fallback=null){
+      try { const val = localStorage.getItem(key); return val ? JSON.parse(val) : fallback; } catch(e){ return fallback; }
+    }
+
+    function updateStats(){
+      const localProfile = readJSON(PROFILE_KEY, null);
+      const publicProfiles = readJSON(PUBLIC_KEY, []);
+      const matches = readJSON(MATCH_KEY, []);
+      const fakes = (publicProfiles || []).filter(p => p.id && p.id.startsWith('fake_'));
+
+      document.getElementById('statLocal').textContent = localProfile ? 1 : 0;
+      document.getElementById('statPublics').textContent = publicProfiles.length;
+      document.getElementById('statFakes').textContent = fakes.length;
+      document.getElementById('statMatchs').textContent = matches.length;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('refreshBtn').addEventListener('click', updateStats);
+      updateStats();
+
+      // Navigation
+      document.querySelectorAll('[data-target]').forEach(btn =>
+        btn.addEventListener('click', () => window.location.href = btn.getAttribute('data-target'))
+      );
+    });
+  </script>
+</body>
+</html>

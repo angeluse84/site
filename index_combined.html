@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Accueil & Match</title>
+  <link rel="icon" href="assets/logo.svg">
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #0f1720;
+      --muted: #9aa4b2;
+      --accent: #ff1177;
+      --accent-2: #6ad1ff;
+      --glass: rgba(255,255,255,0.03);
+    }
+    body {
+      margin: 0; font-family: Inter, system-ui, sans-serif;
+      background: linear-gradient(180deg,#08101a,#061019);
+      color: #e6eef6;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(255,255,255,0.02); padding: 12px 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .logo { width: 50px; height: 50px; }
+    .nav button {
+      background: transparent; color: #e6eef6; border: none;
+      margin-left: 14px; cursor: pointer; font-weight: 600;
+    }
+    .nav button.active { color: var(--accent); text-decoration: underline; }
+    .container { padding: 24px; max-width: 1100px; margin: auto; }
+
+    /* Cartes Accueil */
+    .hero { text-align: center; padding: 40px 0; }
+    .hero h2 { font-size: 26px; color: var(--accent-2); }
+    .features { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 16px; margin-top: 24px; }
+    .card {
+      background: var(--card); padding: 16px; border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    }
+
+    /* Section Match intégrée */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 12px; margin-top: 14px; }
+    .match-card {
+      background: var(--card); padding: 12px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .match-card .head { display: flex; align-items: center; gap: 12px; }
+    .match-card img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
+    .bar { height: 8px; border-radius: 6px; background: var(--glass); overflow: hidden; margin-top: 6px; }
+    .bar > i { display: block; height: 100%; background: linear-gradient(90deg,var(--accent),var(--accent-2)); }
+
+    footer { text-align: center; padding: 16px; color: var(--muted); font-size: 13px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="assets/logo.svg" alt="Pulse logo" class="logo">
+      <h1>Pulse <span style="color:#FF007F;">❤</span></h1>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-target="home">Accueil</button>
+      <button class="nav-btn" data-target="match">Match</button>
+      <button class="nav-btn" data-target="connexion">Connexion</button>
+      <button class="nav-btn" data-target="inscription">Inscription</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- =================== PAGE ACCUEIL =================== -->
+    <section id="home" class="page active">
+      <div class="hero">
+        <h2>Rencontrez des personnes en profondeur</h2>
+        <p>Pulse vous propose un test d'intimité, un ennéagramme et un match hebdomadaire.</p>
+      </div>
+
+      <section class="features">
+        <article class="card"><h3>Ennéagramme</h3><p>Découvrez votre type parmi 9 profils.</p></article>
+        <article class="card"><h3>39 Questions</h3><p>Répondez aux questions d’intimité pour des connexions vraies.</p></article>
+        <article class="card"><h3>Match</h3><p>Recevez un profil compatible chaque semaine.</p></article>
+      </section>
+    </section>
+
+    <!-- =================== PAGE MATCH =================== -->
+    <section id="match" class="page" style="display:none;">
+      <h2>Matchs et compatibilités</h2>
+      <p>Testez le système avec des profils factices générés localement.</p>
+      <div style="margin-top:12px;">
+        <input id="count" type="number" value="6" min="1" max="30" style="width:60px;"> 
+        <button id="generate">Générer</button>
+        <button id="clear">Effacer</button>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+
+  <footer>
+    © Pulse — Version combinée (Accueil + Match)
+  </footer>
+
+  <script>
+    // ================= NAVIGATION =================
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const pages = document.querySelectorAll('.page');
+    navButtons.forEach(btn => {
+      btn.onclick = () => {
+        navButtons.forEach(b => b.classList.remove('active'));
+        pages.forEach(p => p.style.display = 'none');
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).style.display = 'block';
+      };
+    });
+
+    // ================= MATCH LOGIC (simplifiée) =================
+    const PUBLIC_KEY = 'pulse_public_profiles';
+    function readJSON(k, f=[]){ try{ return JSON.parse(localStorage.getItem(k)) || f; } catch(e){ return f; } }
+    function writeJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+    const grid = document.getElementById('grid');
+    document.getElementById('generate').onclick = () => {
+      const n = parseInt(document.getElementById('count').value);
+      const profiles = readJSON(PUBLIC_KEY);
+      for(let i=0;i<n;i++){
+        profiles.push(makeFake(i + profiles.length));
+      }
+      writeJSON(PUBLIC_KEY, profiles);
+      renderProfiles();
+    };
+    document.getElementById('clear').onclick = () => {
+      localStorage.removeItem(PUBLIC_KEY);
+      grid.innerHTML = '';
+    };
+
+    function makeFake(i){
+      const names = ["Léa","Tom","Sophie","Marc","Inès","Paul","Ana","Hugo","Clara","Lucas"];
+      const villes = ["Paris","Toulouse","Lyon","Marseille","Bordeaux"];
+      const name = names[Math.floor(Math.random()*names.length)];
+      const city = villes[Math.floor(Math.random()*villes.length)];
+      const photos = [`https://picsum.photos/seed/${name+i}/200/200`];
+      const compat = Math.floor(Math.random()*40)+60;
+      return { id:"fake_"+i, name, city, photos, compat };
+    }
+
+    function renderProfiles(){
+      const profiles = readJSON(PUBLIC_KEY);
+      grid.innerHTML = profiles.map(p => `
+        <div class="match-card">
+          <div class="head">
+            <img src="${p.photos[0]}" alt="">
+            <div>
+              <div><strong>${p.name}</strong></div>
+              <div style="font-size:13px;color:var(--muted);">${p.city}</div>
+            </div>
+            <div style="margin-left:auto;text-align:right;">
+              <div>${p.compat}%</div>
+              <div class="bar"><i style="width:${p.compat}%;"></i></div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    renderProfiles();
+  </script>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Inscription & Création de profil</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .avatar-thumb{width:96px;height:96px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.04)}
+    .photos-preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .photo-item{width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,0.04)}
+    .char-counter{font-size:12px;color:var(--muted);text-align:right}
+  </style>
+</head>
+<body>
+  <header class="site-header small">
+    <div class="brand"><img src="assets/logo.svg" class="logo" alt="Pulse"/><h1>Pulse</h1></div>
+    <nav class="nav">
+      <button class="nav-btn" data-target="index.html">Accueil</button>
+      <button class="nav-btn" data-target="match.html">Match</button>
+      <button class="nav-btn" data-target="profiles_public_view.html">Profils</button>
+    </nav>
+  </header>
+
+  <main class="container narrow">
+    <section class="card form-card">
+      <h2>Créer un compte & profil</h2>
+      <p class="muted">Ton profil contiendra : prénom, nom, ville, bio (≤5000 chars), photos, Ennéagramme (unique) et réponses aux 39 questions.</p>
+
+      <form id="signupForm" onsubmit="return false;">
+        <label for="firstName">Prénom</label>
+        <input id="firstName" required />
+
+        <label for="lastName">Nom</label>
+        <input id="lastName" required />
+
+        <label for="city">Ville</label>
+        <input id="city" placeholder="Ex : Toulouse" />
+
+        <label for="email">Email</label>
+        <input id="email" type="email" required />
+
+        <label for="password">Mot de passe</label>
+        <input id="password" type="password" required />
+
+        <label for="bio">Bio (max 5000 caractères)</label>
+        <textarea id="bio" rows="6" maxlength="5000" placeholder="Parle de toi..."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small-note">Bio publique (visible si publié)</div>
+          <div class="char-counter" id="bioCount">0 / 5000</div>
+        </div>
+
+        <label>Photos (plusieurs)</label>
+        <input id="photosInput" type="file" accept="image/*" multiple />
+        <div class="photos-preview" id="photosPreview"></div>
+
+        <hr style="opacity:0.06;margin:12px 0" />
+
+        <!-- Ennéagramme (single) -->
+        <div class="card" style="padding:10px">
+          <h4>Ton Ennéagramme (un seul test)</h4>
+          <div class="muted">Valeurs 1..5 — enregistrées dans la clé unique <code>pulse_enneagramme</code>.</div>
+          <div id="enneaInputs" style="display:grid;gap:8px;margin-top:8px"></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="saveEnnea" class="primary" type="button">Enregistrer Ennéagramme</button>
+            <button id="importEnnea" class="secondary" type="button">Charger si existant</button>
+          </div>
+        </div>
+
+        <hr style="opacity:0.06;margin:12px 0" />
+
+        <!-- 39 questions import -->
+        <label>39 Questions</label>
+        <div style="display:flex;gap:8px">
+          <button id="import39" class="secondary" type="button">Importer réponses existantes</button>
+          <button id="edit39" class="btn-link" type="button">Éditer les 39 réponses</button>
+        </div>
+        <div id="answersSummary" class="muted" style="margin-top:8px">Réponses remplies : 0 / 39</div>
+
+        <div class="form-actions" style="margin-top:12px">
+          <button id="createProfile" class="primary" type="submit">Créer mon profil</button>
+          <button id="publishProfile" class="secondary" type="button">Publier maintenant</button>
+        </div>
+
+        <p id="notice" class="muted" style="margin-top:10px"></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Modal 39 questions -->
+  <div id="modal39" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:20px;z-index:9999">
+    <div style="background:#071029;padding:16px;border-radius:12px;max-width:900px;width:100%;max-height:90vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Éditer les 39 questions</h3>
+        <button id="close39" class="secondary smallBtn">Fermer</button>
+      </div>
+      <div id="modal39Content" style="margin-top:12px"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button id="save39Btn" class="primary smallBtn">Sauvegarder</button>
+        <button id="cancel39Btn" class="btn-link smallBtn">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Clés localStorage utilisées :
+   - pulse_user_profile         -> profil local complet (id, firstname, lastname, email, bio, photos[], enneagram[], answers39[])
+   - pulse_enneagramme          -> test ennéagramme unique (array 9)
+   - pulse_intimite_answers     -> canonical answers 39 (array 39) (optionnel)
+   - pulse_public_profiles      -> array of published profiles
+   - pulse_matches              -> array of matches { pair: "idA::idB", createdAt }
+*/
+const PROFILE_KEY = 'pulse_user_profile';
+const ENNEA_KEY = 'pulse_enneagramme';
+const INTIMITE_KEY = 'pulse_intimite_answers';
+const PUBLIC_KEY = 'pulse_public_profiles';
+const MATCHES_KEY = 'pulse_matches';
+
+const ENNEA_LABELS = [
+ "1 — Perfectionniste","2 — Altruiste","3 — Performeur","4 — Individualiste",
+ "5 — Observateur","6 — Loyal","7 — Epicurien","8 — Challenger","9 — Pacificateur"
+];
+
+function readJSON(k, fallback=null){ try{ const r = localStorage.getItem(k); return r ? JSON.parse(r) : fallback; } catch(e){ return fallback; } }
+function writeJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function uid(p='id'){ return p + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+function escapeHtml(s){ if(s===null||s===undefined) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+// ========== UI bootstrap ==========
+document.addEventListener('DOMContentLoaded', () => {
+  // elements
+  const bioEl = document.getElementById('bio');
+  const bioCount = document.getElementById('bioCount');
+  const photosInput = document.getElementById('photosInput');
+  const photosPreview = document.getElementById('photosPreview');
+  const enneaBox = document.getElementById('enneaInputs');
+  const saveEnneaBtn = document.getElementById('saveEnnea');
+  const importEnneaBtn = document.getElementById('importEnnea');
+  const import39Btn = document.getElementById('import39');
+  const edit39Btn = document.getElementById('edit39');
+  const answersSummary = document.getElementById('answersSummary');
+  const createProfileBtn = document.getElementById('createProfile');
+  const publishProfileBtn = document.getElementById('publishProfile');
+  const notice = document.getElementById('notice');
+
+  // modal 39 elements
+  const modal39 = document.getElementById('modal39');
+  const modal39Content = document.getElementById('modal39Content');
+  const close39 = document.getElementById('close39');
+  const save39Btn = document.getElementById('save39Btn');
+  const cancel39Btn = document.getElementById('cancel39Btn');
+
+  // build ennea inputs
+  function renderEnneaInputs(){
+    enneaBox.innerHTML = '';
+    const saved = readJSON(ENNEA_KEY, Array(9).fill(3));
+    ENNEA_LABELS.forEach((lab, i) => {
+      const id = `ennea_in_${i+1}`;
+      const row = document.createElement('div');
+      row.innerHTML = `<label for="${id}">${lab}</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="${id}" type="range" min="1" max="5" step="1" value="${saved[i]}" />
+          <output id="${id}_out" style="width:36px;text-align:center">${saved[i]}</output>
+        </div>`;
+      enneaBox.appendChild(row);
+      const input = row.querySelector('input');
+      const out = row.querySelector('output');
+      input.addEventListener('input', ()=> out.value = input.value);
+    });
+  }
+
+  renderEnneaInputs();
+  bioCount.textContent = `${bioEl.value.length} / 5000`;
+
+  bioEl.addEventListener('input', ()=> bioCount.textContent = `${bioEl.value.length} / 5000`);
+
+  // photos handling (store dataURLs in a temp array until save)
+  let photosData = [];
+  function renderPhotosPreview(){
+    photosPreview.innerHTML = '';
+    photosData.forEach((d, idx) => {
+      const img = document.createElement('img');
+      img.src = d;
+      img.className = 'photo-item';
+      img.title = `Photo ${idx+1}`;
+      photosPreview.appendChild(img);
+    });
+  }
+
+  photosInput.addEventListener('change', (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (!files.length) return;
+    // read all files as dataURL (client-only)
+    let loaded = 0;
+    files.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        photosData.push(reader.result);
+        loaded++;
+        if (loaded === files.length) renderPhotosPreview();
+      };
+      reader.readAsDataURL(f);
+    });
+    // reset input
+    photosInput.value = '';
+  });
+
+  // Ennéagramme save / import
+  saveEnneaBtn.addEventListener('click', () => {
+    const arr = [];
+    for (let i=1;i<=9;i++){
+      const v = document.getElementById(`ennea_in_${i}`).value;
+      arr.push(Number(v));
+    }
+    writeJSON(ENNEA_KEY, arr);
+    notice.textContent = 'Ennéagramme enregistré (clé unique).';
+    setTimeout(()=> notice.textContent = '', 2500);
+  });
+
+  importEnneaBtn.addEventListener('click', () => {
+    const arr = readJSON(ENNEA_KEY, null);
+    if (!arr){ alert('Aucun ennéagramme trouvé.'); return; }
+    for (let i=1;i<=9;i++){
+      const el = document.getElementById(`ennea_in_${i}`);
+      el.value = arr[i-1];
+      document.getElementById(`ennea_in_${i}_out`).value = arr[i-1];
+    }
+    notice.textContent = 'Ennéagramme importé dans le formulaire.';
+    setTimeout(()=> notice.textContent = '', 2200);
+  });
+
+  // Modal 39: build editors
+  function open39Modal(initialAnswers){
+    modal39.style.display = 'flex';
+    modal39Content.innerHTML = '';
+    const existing = initialAnswers || readJSON(INTIMITE_KEY, Array(39).fill(''));
+    existing.forEach((val, i) => {
+      const id = 'q39_'+i;
+      const wrapper = document.createElement('div');
+      wrapper.style.marginBottom = '10px';
+      wrapper.innerHTML = `<label for="${id}"><strong>Q${i+1}</strong></label>
+        <textarea id="${id}" rows="2" style="width:100%;margin-top:6px">${val || ''}</textarea>`;
+      modal39Content.appendChild(wrapper);
+    });
+  }
+  close39.addEventListener('click', ()=> modal39.style.display = 'none');
+  cancel39Btn.addEventListener('click', ()=> modal39.style.display = 'none');
+
+  save39Btn.addEventListener('click', ()=> {
+    const arr = [];
+    for (let i=0;i<39;i++){
+      const el = document.getElementById('q39_'+i);
+      arr.push(el ? el.value.trim() : '');
+    }
+    // save canonical key
+    writeJSON(INTIMITE_KEY, arr);
+    answersSummary.textContent = `Réponses remplies : ${arr.filter(a=>a && a.trim()).length} / 39`;
+    modal39.style.display = 'none';
+    notice.textContent = '39 réponses sauvegardées.';
+    setTimeout(()=> notice.textContent = '', 1600);
+  });
+
+  import39Btn.addEventListener('click', ()=> {
+    const raw = readJSON(INTIMITE_KEY, null);
+    if (!raw) return alert('Aucune réponse trouvée sous la clé canonical pulse_intimite_answers.');
+    answersSummary.textContent = `Réponses remplies : ${raw.filter(a=>a && a.trim()).length} / 39`;
+    photosData = photosData; // no change
+    notice.textContent = '39 réponses importées dans le profil (à sauvegarder).';
+    setTimeout(()=> notice.textContent = '', 2200);
+  });
+
+  edit39Btn.addEventListener('click', ()=> {
+    const existing = readJSON(INTIMITE_KEY, Array(39).fill(''));
+    open39Modal(existing);
+  });
+
+  // create profile or update existing
+createProfileBtn.addEventListener('click', ()=> {
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName = document.getElementById('lastName').value.trim();
+  const email = document.getElementById('email').value.trim().toLowerCase();
+  const password = document.getElementById('password').value;
+  const city = document.getElementById('city').value.trim();
+  const bio = document.getElementById('bio').value.trim();
+
+  if (!firstName || !lastName || !email || !password){ alert('Prénom, Nom, Email et Mot de passe sont requis.'); return; }
+
+  // ensure ennea saved canonically
+  const ennea = readJSON(ENNEA_KEY, null) || (function(){
+    const arr = [];
+    for (let i=1;i<=9;i++){
+      arr.push(Number(document.getElementById(`ennea_in_${i}`).value));
+    }
+    writeJSON(ENNEA_KEY, arr); return arr;
+  })();
+
+  // answers: canonical
+  const answers = readJSON(INTIMITE_KEY, Array(39).fill(''));
+
+  const profile = {
+    id: uid('profile'),
+    firstName, lastName, email, password, city, bio,
+    photos: photosData.slice(0,6),
+    enneagram: ennea,
+    answers,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  // save
+   // sauvegarde
+  writeJSON(PROFILE_KEY, profile);
+  writeJSON(ENNEA_KEY, profile.enneagram);
+  writeJSON(INTIMITE_KEY, profile.answers);
+
+  answersSummary.textContent = `Réponses remplies : ${profile.answers.filter(a=>a && a.trim()).length} / 39`;
+  notice.textContent = 'Profil créé et sauvegardé localement (pulse_user_profile).';
+
+  // redirection automatique après 2 secondes
+  setTimeout(() => {
+    window.location.href = 'profiles_public_view.html';
+  }, 2000);
+
+
+
+  // publish: copy to pulse_public_profiles (visible in public list)
+  publishProfileBtn.addEventListener('click', ()=> {
+    const profile = readJSON(PROFILE_KEY, null);
+    if (!profile){ alert('Sauvegarde ton profil d\'abord (Créer mon profil).'); return; }
+    const pool = readJSON(PUBLIC_KEY, []);
+    // create published object (public-safe subset)
+    const pub = {
+      id: profile.id,
+      name: profile.firstName + ' ' + profile.lastName,
+      city: profile.city || '',
+      bio: profile.bio || '',
+      photos: profile.photos || [],
+      enneagram: profile.enneagram || Array(9).fill(3),
+      answers: profile.answers || Array(39).fill(''),
+      publishedAt: new Date().toISOString()
+    };
+    // replace if exists
+    const idx = pool.findIndex(p => p.id === pub.id);
+    if (idx>=0) pool.splice(idx,1,pub); else pool.unshift(pub);
+    writeJSON(PUBLIC_KEY, pool);
+    notice.textContent = 'Profil publié localement (pulse_public_profiles).';
+    setTimeout(()=> notice.textContent = '', 2000);
+  });
+
+  // pre-fill UI if profile exists
+  const existing = readJSON(PROFILE_KEY, null);
+  if (existing){
+    document.getElementById('firstName').value = existing.firstName || '';
+    document.getElementById('lastName').value = existing.lastName || '';
+    document.getElementById('city').value = existing.city || '';
+    document.getElementById('email').value = existing.email || '';
+    document.getElementById('bio').value = existing.bio || '';
+    bioCount.textContent = `${existing.bio ? existing.bio.length : 0} / 5000`;
+    photosData = existing.photos || [];
+    renderPhotosPreview();
+    // ensure canonical ennea exists
+    if (existing.enneagram) writeJSON(ENNEA_KEY, existing.enneagram);
+    if (existing.answers) writeJSON(INTIMITE_KEY, existing.answers);
+    // fill ennea inputs from canonical
+    const canonical = readJSON(ENNEA_KEY, null);
+    if (canonical){
+      for (let i=1;i<=9;i++){
+        const el = document.getElementById(`ennea_in_${i}`);
+        if (el) { el.value = canonical[i-1]; document.getElementById(`ennea_in_${i}_out`).value = canonical[i-1]; }
+      }
+    }
+    answersSummary.textContent = `Réponses remplies : ${readJSON(INTIMITE_KEY, Array(39).fill('')).filter(a=>a && a.trim()).length} / 39`;
+  } else {
+    answersSummary.textContent = `Réponses remplies : ${readJSON(INTIMITE_KEY, Array(39).fill('')).filter(a=>a && a.trim()).length} / 39`;
+  }
+
+  // nav data-target buttons handler
+  document.querySelectorAll('[data-target]').forEach(btn => btn.addEventListener('click', ()=> window.location.href = btn.getAttribute('data-target')));
+
+});
+</script>
+
+<script src="js/main.js"></script>
+</body>
+</html>
