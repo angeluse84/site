@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pulse — Connexion</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="site-header small">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Pulse logo" class="logo" />
+      <h1>Pulse</h1>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn" data-target="index.html">Accueil</button>
+      <button class="nav-btn" data-target="inscription.html">Inscription</button>
+    </nav>
+  </header>
+
+  <main class="container narrow">
+    <h2>Connexion</h2>
+    <form id="loginForm" class="card form-card" action="#" method="post" onsubmit="return false;">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required />
+
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password" required />
+
+      <div class="form-actions">
+        <button type="submit" class="primary">Se connecter</button>
+        <button type="button" class="secondary" data-target="inscription.html">Créer un compte</button>
+      </div>
+
+      <p class="muted">Ceci est un prototype : le formulaire ne soumet pas réellement.</p>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    <small>© Pulse — Prototype</small>
+  </footer>
+
+  <script src="js/main.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const btnLogin = document.getElementById('loginBtn'); // ton bouton de connexion
+
+  if (btnLogin) {
+    btnLogin.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // Simule une connexion réussie (tu remplaceras ça plus tard par un vrai contrôle)
+      const firstLogin = !localStorage.getItem('pulse_first_login_done');
+
+      // Enregistre que l'utilisateur s'est connecté au moins une fois
+      localStorage.setItem('pulse_first_login_done', 'true');
+
+      // Redirection selon le parcours
+      if (firstLogin) {
+        // Étape 1 → Test de l’Ennéagramme
+        window.location.href = "enneagramme.html";
+      } else {
+        // Si déjà connecté une fois → vers l'accueil ou profil
+        window.location.href = "index.html";
+      }
+    });
+  }
+
+  // Active les boutons de navigation du menu
+  document.querySelectorAll('[data-target]').forEach(b => {
+    b.addEventListener('click', () => {
+      window.location.href = b.dataset.target;
+    });
+  });
+});
+</script>
+
+</body>
+</html>
