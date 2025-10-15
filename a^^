@@ -1,0 +1,302 @@
+/**
+ * Pulse — MVP dating site
+ * Tech: Express + EJS + SQLite3 + Socket.IO + Multer + express-session
+ * CommonJS build (no "type":"module") to avoid ESM pitfalls.
+ */
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+const bcrypt = require('bcrypt');
+const multer = require('multer');
+const sqlite3 = require('sqlite3').verbose();
+const http = require('http');
+const { Server } = require('socket.io');
+const expressLayouts = require('express-ejs-layouts');
+
+// ---------- Config ----------
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+const DB_PATH = path.join(__dirname, 'pulse.db');
+const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const AVATAR_DIR = path.join(UPLOADS_DIR, 'avatars');
+const GALLERY_DIR = path.join(UPLOADS_DIR, 'gallery');
+
+// Ensure upload dirs
+[UPLOADS_DIR, AVATAR_DIR, GALLERY_DIR].forEach(d => {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+});
+
+// EJS + layouts
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(expressLayouts);
+app.set('layout', 'layout');
+
+// Static & parsers
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.urlencoded({ extended: true }));
+
+// Sessions
+app.use(session({
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: __dirname }),
+  secret: 'pulse_super_secret_change_me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 } // 1 week
+}));
+
+// Multer storage for avatar and gallery
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const isAvatar = file.fieldname === 'avatar';
+    cb(null, isAvatar ? AVATAR_DIR : GALLERY_DIR);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+    const safe = Date.now() + '-' + Math.random().toString(36).slice(2) + ext;
+    cb(null, safe);
+  }
+});
+const upload = multer({ storage });
+
+// ---------- DB ----------
+const db = new sqlite3.Database(DB_PATH);
+
+// Initialize schema on startup if tables missing
+const schemaSQL = fs.readFileSync(SCHEMA_PATH, 'utf8');
+db.serialize(() => {
+  db.exec(schemaSQL, (err) => {
+    if (err) console.error('DB schema init error:', err);
+  });
+});
+
+// ---------- Helpers ----------
+function requireAuth(req, res, next) {
+  if (!req.session.user) return res.redirect('/login');
+  next();
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null)) return Infinity;
+  const toRad = d => d * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function weekSeed() {
+  const d = new Date();
+  const onejan = new Date(d.getFullYear(),0,1);
+  const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
+  return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+function compatScore(a, b) {
+  // Lower sum of absolute differences => closer => higher score
+  let sum = 0, count = 0;
+  for (let i=1;i<=40;i++) {
+    const ai = a[`q${i}`]; const bi = b[`q${i}`];
+    if (ai != null && bi != null) { sum += Math.abs(ai - bi); count++; }
+  }
+  if (count === 0) return 0;
+  const maxDiff = 4 * count; // Likert 1..5 => max |diff|=4 each
+  const score = 1 - (sum / maxDiff); // 0..1
+  return score;
+}
+
+// Prefilter users by seeking preference
+function seekingMatch(me, other) {
+  // me.seeking: who I want to see
+  // other.gender: who they are
+  // and vice versa for symmetry
+  const fitsMe =
+    me.seeking === 'both' ||
+    (me.seeking === 'male' && other.gender === 'male') ||
+    (me.seeking === 'female' && other.gender === 'female');
+  const fitsOther =
+    other.seeking === 'both' ||
+    (other.seeking === 'male' && me.gender === 'male') ||
+    (other.seeking === 'female' && me.gender === 'female');
+  return !!(fitsMe && fitsOther);
+}
+
+// ---------- Auth Routes ----------
+app.get('/', (req, res) => {
+  if (req.session.user) return res.redirect('/dashboard');
+  res.render('index');
+});
+
+app.get('/register', (req, res) => res.render('register'));
+app.post('/register', (req, res) => {
+  const { email, password, first_name, last_name, username, gender } = req.body;
+  if (!email || !password) return res.render('register', { error: 'Email et mot de passe requis.' });
+  const hash = bcrypt.hashSync(password, 10);
+  const stmt = db.prepare(`INSERT INTO users (email, password_hash, first_name, last_name, username, gender)
+                           VALUES (?, ?, ?, ?, ?, ?)`);
+  stmt.run(email.trim(), hash, first_name||'', last_name||'', username||'', gender||null, function(err){
+    if (err) {
+      console.error(err);
+      return res.render('register', { error: 'Email ou pseudo déjà utilisé.' });
+    }
+    req.session.user = { id: this.lastID, email, username, gender };
+    res.redirect('/dashboard');
+  });
+});
+
+app.get('/login', (req, res) => res.render('login'));
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+  db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+    if (err || !row) return res.render('login', { error: 'Identifiants invalides.' });
+    if (!bcrypt.compareSync(password, row.password_hash))
+      return res.render('login', { error: 'Identifiants invalides.' });
+    req.session.user = { id: row.id, email: row.email, username: row.username, gender: row.gender };
+    res.redirect('/dashboard');
+  });
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => res.redirect('/'));
+});
+
+// ---------- Dashboard ----------
+app.get('/dashboard', requireAuth, (req, res) => {
+  const uid = req.session.user.id;
+  db.get(`SELECT * FROM users WHERE id = ?`, [uid], (err, me) => {
+    if (err || !me) return res.redirect('/logout');
+    // Has the user completed answers?
+    db.get(`SELECT * FROM answers WHERE user_id = ?`, [uid], (e, a) => {
+      const hasTest = !!a;
+      res.render('dashboard', { me, hasTest, weekId: weekSeed() });
+    });
+  });
+});
+
+// ---------- Profile (bio, seeking, geoloc, avatar, gallery) ----------
+app.get('/profile', requireAuth, (req, res) => {
+  db.get(`SELECT * FROM users WHERE id = ?`, [req.session.user.id], (err, me) => {
+    db.all(`SELECT * FROM photos WHERE user_id = ? ORDER BY created_at DESC`, [req.session.user.id], (e2, photos) => {
+      res.render('profile', { me, photos, error: null, msg: null });
+    });
+  });
+});
+
+const uploadsFields = upload.fields([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'gallery', maxCount: 10 }
+]);
+
+app.post('/profile', requireAuth, uploadsFields, (req, res) => {
+  const uid = req.session.user.id;
+  const { bio, seeking, lat, lng, radius_km, gender } = req.body;
+
+  // Update main fields
+  db.run(`UPDATE users SET bio = ?, seeking = ?, lat = ?, lng = ?, radius_km = ?, gender = ? WHERE id = ?`,
+    [bio?.slice(0,5000) || '', seeking || 'both', lat || null, lng || null, radius_km || 50, gender || null, uid],
+    function(err){
+      if (err) console.error(err);
+      // Avatar
+      if (req.files && req.files['avatar'] && req.files['avatar'][0]) {
+        const avatarPath = '/uploads/avatars/' + path.basename(req.files['avatar'][0].path);
+        db.run(`UPDATE users SET avatar_path = ? WHERE id = ?`, [avatarPath, uid]);
+      }
+      // Gallery
+      if (req.files && req.files['gallery']) {
+        const stmt = db.prepare(`INSERT INTO photos (user_id, path) VALUES (?, ?)`);
+        for (const f of req.files['gallery']) {
+          const p = '/uploads/gallery/' + path.basename(f.path);
+          stmt.run(uid, p);
+        }
+        stmt.finalize();
+      }
+      res.redirect('/profile');
+    });
+});
+
+// ---------- 40Q Test ----------
+const QUESTIONS = Array.from({length:40}, (_,i) => `Question ${i+1} — Indiquez votre accord (1 à 5)`);
+
+app.get('/test', requireAuth, (req, res) => {
+  db.get(`SELECT * FROM answers WHERE user_id = ?`, [req.session.user.id], (err, row) => {
+    res.render('test', { questions: QUESTIONS, existing: row });
+  });
+});
+
+app.post('/test', requireAuth, (req, res) => {
+  const uid = req.session.user.id;
+  const answers = [];
+  for (let i=1;i<=40;i++) {
+    const v = Math.max(1, Math.min(5, parseInt(req.body[`q${i}`] || '3', 10)));
+    answers.push(v);
+  }
+  // UPSERT answers
+  const columns = Array.from({length:40}, (_,i)=>`q${i+1}`).join(',');
+  const placeholders = Array(40).fill('?').join(',');
+  const updates = Array.from({length:40}, (_,i)=>`q${i+1} = excluded.q${i+1}`).join(',');
+  const sql = `INSERT INTO answers (user_id, ${columns}) VALUES (?, ${placeholders})
+               ON CONFLICT(user_id) DO UPDATE SET ${updates}`;
+  db.run(sql, [uid, ...answers], function(err){
+    if (err) console.error(err);
+    res.redirect('/match');
+  });
+});
+
+// ---------- Match (weekly best) ----------
+app.get('/match', requireAuth, (req, res) => {
+  const uid = req.session.user.id;
+  db.get(`SELECT u.*, a.* FROM users u LEFT JOIN answers a ON u.id = a.user_id WHERE u.id = ?`, [uid], (err, me) => {
+    if (err || !me) return res.redirect('/logout');
+
+    db.all(`SELECT u.*, a.* FROM users u
+            LEFT JOIN answers a ON u.id = a.user_id
+            WHERE u.id != ?`, [uid], (e, others) => {
+      const scored = [];
+      for (const o of others) {
+        if (!seekingMatch(me, o)) continue;
+        const dist = haversineKm(me.lat, me.lng, o.lat, o.lng);
+        if (isFinite(dist) && me.radius_km && dist > me.radius_km) continue;
+        const s = compatScore(me, o);
+        scored.push({ user: o, score: s, distance: isFinite(dist)? dist : null });
+      }
+      scored.sort((a,b)=> b.score - a.score);
+
+      const selected = scored[0] || null; // weekly pick = top at render time
+      res.render('match', { me, candidates: scored.slice(0,10), selected, weekId: weekSeed() });
+    });
+  });
+});
+
+// ---------- Chat ----------
+io.on('connection', (socket) => {
+  socket.on('joinRoom', ({ meId, otherId }) => {
+    const room = [meId, otherId].sort().join('-');
+    socket.join(room);
+    socket.to(room).emit('system', 'La personne a rejoint le chat.');
+  });
+  socket.on('message', ({ meId, otherId, text }) => {
+    const room = [meId, otherId].sort().join('-');
+    io.to(room).emit('message', { from: meId, text, at: Date.now() });
+  });
+});
+
+app.get('/chat/:otherId', requireAuth, (req, res) => {
+  const uid = req.session.user.id;
+  const otherId = parseInt(req.params.otherId, 10);
+  db.get(`SELECT id, username, avatar_path FROM users WHERE id = ?`, [otherId], (err, other) => {
+    if (!other) return res.redirect('/match');
+    res.render('chat', { meId: uid, other });
+  });
+});
+
+// ---------- Start ----------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Pulse API on :${PORT}`));
+
