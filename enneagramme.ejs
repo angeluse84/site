@@ -1,0 +1,27 @@
+// Tests
+app.get('/test', requireAuth, (req,res)=>{
+  res.render('test', { COMPAT_QUESTIONS, ENNEA_ITEMS });
+});
+
+app.post('/test', requireAuth, (req,res)=>{
+  // compat answers: c1..c40 ; enneagram: e1..e27 (1..5)
+  const compat = [];
+  for(let i=1;i<=40;i++) compat.push(Math.max(1, Math.min(5, parseInt(req.body[`c${i}`]||'3'))));
+
+  const enneas = Array(10).fill(0); // 1..9
+  ENNEA_ITEMS.forEach(it=>{
+    const v = Math.max(1, Math.min(5, parseInt(req.body[`e${it.id}`]||'3')));
+    enneas[it.t] += v;
+  });
+  let type = 1, maxv = -1;
+  for(let t=1;t<=9;t++){ if(enneas[t]>maxv){ maxv=enneas[t]; type=t; } }
+  const scoresObj = {}; for(let t=1;t<=9;t++) scoresObj[t]=enneas[t];
+
+  db.run(`INSERT INTO tests_compat(user_id, answers_compat, updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+          ON CONFLICT(user_id) DO UPDATE SET answers_compat=excluded.answers_compat, updated_at=CURRENT_TIMESTAMP`,
+          [req.session.user.id, JSON.stringify(compat)], ()=>{
+    db.run(`INSERT INTO tests_enneagram(user_id, scores, type, updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET scores=excluded.scores, type=excluded.type, updated_at=CURRENT_TIMESTAMP`,
+            [req.session.user.id, JSON.stringify(scoresObj), type], ()=> res.redirect('/match'));
+  });
+});
